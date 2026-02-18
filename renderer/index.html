@@ -1,0 +1,176 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>System Agent Setup</title>
+    <style>
+      body {
+        margin: 0;
+        font-family: "Segoe UI", Arial, sans-serif;
+        background: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 100vh;
+      }
+
+      .window {
+        width: 420px;
+        background: #ffffff;
+        border-radius: 14px;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+        padding: 30px;
+        animation: fadeIn 0.4s ease-in-out;
+      }
+
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+          transform: translateY(10px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      h3 {
+        margin-top: 0;
+        margin-bottom: 20px;
+        font-weight: 600;
+        color: #333;
+        text-align: center;
+      }
+
+      .form-group {
+        margin-bottom: 18px;
+      }
+
+      label {
+        display: block;
+        margin-bottom: 6px;
+        font-size: 13px;
+        font-weight: 600;
+        color: #555;
+      }
+
+      .input-wrapper {
+        display: flex;
+        border: 1px solid #dcdcdc;
+        border-radius: 8px;
+        overflow: hidden;
+        transition: all 0.2s ease;
+      }
+
+      .input-wrapper:focus-within {
+        border-color: #2a5298;
+        box-shadow: 0 0 0 2px rgba(42, 82, 152, 0.15);
+      }
+
+      .prefix {
+        background: #f5f7fa;
+        padding: 12px;
+        font-weight: 600;
+        font-size: 13px;
+        color: #444;
+        border-right: 1px solid #e0e0e0;
+      }
+
+      input {
+        flex: 1;
+        padding: 12px;
+        border: none;
+        outline: none;
+        font-size: 14px;
+      }
+
+      input::placeholder {
+        color: #aaa;
+      }
+
+      .primary-btn {
+        width: 100%;
+        padding: 12px;
+        margin-top: 10px;
+        border: none;
+        border-radius: 8px;
+        font-size: 15px;
+        font-weight: 600;
+        cursor: pointer;
+        background: linear-gradient(135deg, #1e88e5, #1565c0);
+        color: white;
+        transition: all 0.2s ease;
+      }
+
+      .primary-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 20px rgba(21, 101, 192, 0.3);
+      }
+
+      .primary-btn:active {
+        transform: scale(0.98);
+      }
+
+      #status {
+        margin-top: 18px;
+        font-size: 13px;
+        text-align: center;
+        color: #666;
+        background: #f5f7fa;
+        padding: 8px;
+        border-radius: 6px;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="window">
+      <h3>Connection Configuration</h3>
+
+      <div class="form-group">
+        <label>Server IP Address</label>
+        <div class="input-wrapper">
+          <div class="prefix">IP</div>
+          <input id="ip" placeholder="192.168.1.100" />
+          <div class="prefix">PORT</div>
+          <input id="port" placeholder="8080" />
+        </div>
+      </div>
+
+      <button class="primary-btn" onclick="save()">Save & Start</button>
+
+      <p id="status">Waiting for configuration...</p>
+    </div>
+
+    <script>
+      function isValidIP(ip) {
+        const regex =
+          /^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
+        return regex.test(ip);
+      }
+
+      function save() {
+        const ip = document.getElementById("ip").value.trim();
+        const portText = document.getElementById("port").value.trim();
+        const port = Number(portText);
+
+        if (!isValidIP(ip)) {
+          alert("Enter valid IPv4 address.");
+          return;
+        }
+
+        if (!Number.isInteger(port) || port < 1 || port > 65535) {
+          alert("Enter valid port (1-65535).");
+          return;
+        }
+
+        const fullUrl = `ws://${ip}:${port}/ws`;
+
+        window.api.saveServer(fullUrl);
+
+        document.getElementById("status").innerText =
+          "Connecting to " + fullUrl;
+      }
+    </script>
+  </body>
+</html>
