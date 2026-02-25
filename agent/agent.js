@@ -15,7 +15,7 @@ const percent = v => v.toFixed(1) + " %";
 
 async function resolvePcId() {
   try {
-    PC_ID = os.hostname() || `PC-${Math.floor(Math.random() * 10000)}`;
+    PC_ID = `${os.hostname()} - ${os.userInfo().username}` || `PC-${Math.floor(Math.random() * 10000)}`;
   } catch {
     PC_ID = `PC-${Math.floor(Math.random() * 10000)}`;
   }
