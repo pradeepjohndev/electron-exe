@@ -1,16 +1,24 @@
 const WebSocket = require("ws");
 const si = require("systeminformation");
 const os = require("os");
+const axios = require("axios");
 
 let PC_ID = "UNKNOWN-PC";
 let socket;
 let metricsInterval;
 let heartbeatInterval;
-let staticPayload;
+let dbInterval;
 let reconnectTimeout;
-let currentServerUrl;
+let staticPayload;
+let staticSentToDB = false;
 
-const gb = bytes => (bytes / 1024 ** 3).toFixed(2) + " GB";
+let currentServerUrl;
+let currentDbUrl;
+
+const DB_INTERVAL = 10000;
+let diskTick = 0;
+
+const gb = bytes => Number((bytes / 1024 ** 3).toFixed(2));
 const percent = v => v.toFixed(1) + " %";
 
 async function resolvePcId() {
@@ -19,6 +27,12 @@ async function resolvePcId() {
   } catch {
     PC_ID = `PC-${Math.floor(Math.random() * 10000)}`;
   }
+}
+
+function convertWsToHttp(wsUrl) {
+  const url = new URL(wsUrl);
+  const protocol = url.protocol === "wss:" ? "https:" : "http:";
+  return `${protocol}//${url.host}`;
 }
 
 async function getStaticInfo() {
@@ -46,6 +60,70 @@ async function getStaticInfo() {
       total: gb(memory.total)
     }
   };
+}
+
+async function sendStaticInfoToDB() {
+  if (staticSentToDB || !staticPayload) return;
+
+  try {
+    await axios.post(`${currentDbUrl}/api/agent/register`, {
+      pc_id: PC_ID,
+      hostname: PC_ID,
+      manufacturer: staticPayload.system.manufacturer,
+      model: staticPayload.system.model,
+      os_distro: staticPayload.os.distro,
+      os_arch: staticPayload.os.arch,
+      cpu_brand: staticPayload.cpu.brand,
+      cpu_cores: staticPayload.cpu.cores,
+      total_memory_gb: staticPayload.memory.total
+    });
+
+    staticSentToDB = true;
+    console.log("Static info stored in DB");
+
+  } catch (err) {
+    console.error("Static DB error:", err.response?.data || err.message);
+  }
+}
+
+async function sendDynamicInfoToDB() {
+  try {
+    const [load, mem, time, disks] = await Promise.all([
+      si.currentLoad(),
+      si.mem(),
+      si.time(),
+      si.fsSize()
+    ]);
+
+    const payload = {
+      pc_id: PC_ID,
+      cpu_load: Number(load.currentLoad.toFixed(2)),
+      memory_used: mem.used,
+      memory_free: mem.available,
+      memory_total: mem.total,
+      uptime: Math.floor(time.uptime)
+    };
+
+    diskTick++;
+
+    if (diskTick >= 6) {
+      payload.disks = disks.map(d => ({
+        mount: String(d.mount || ""),
+        type: d.type || "Unknown",
+        total_gb: gb(d.size),
+        used_gb: gb(d.used),
+        available_gb: gb(d.available),
+        usage_percent: Number(d.use.toFixed(2))
+      }));
+
+      diskTick = 0;
+    }
+
+    await axios.post(`${currentDbUrl}/api/metrics`, payload);
+
+  } catch (err) {
+    console.error("Dynamic DB error:", err.response?.data || err.message);
+  }
 }
 
 function sendHeartbeat() {
@@ -90,7 +168,7 @@ function startFastMetrics() {
             ip: net?.ip4 || "N/A",
             mac: net?.mac || "N/A",
             iface: net?.iface || "N/A",
-            Upload: netlog ? (netlog.tx_sec / 1024).toFixed(2) : "0",
+            upload: netlog ? (netlog.tx_sec / 1024).toFixed(2) : "0",
             download: netlog ? (netlog.rx_sec / 1024).toFixed(2) : "0"
           },
           disks: disks.map(d => ({
@@ -114,15 +192,21 @@ function startFastMetrics() {
 function cleanupIntervals() {
   clearInterval(metricsInterval);
   clearInterval(heartbeatInterval);
+  clearInterval(dbInterval);
   clearTimeout(reconnectTimeout);
+
   metricsInterval = null;
   heartbeatInterval = null;
+  dbInterval = null;
   reconnectTimeout = null;
 }
 
-async function connect(serverUrl) {
+function connect(serverUrl) {
   currentServerUrl = serverUrl;
+  currentDbUrl = convertWsToHttp(serverUrl);
+
   console.log("Agent connecting to:", serverUrl);
+  console.log("DB URL:", currentDbUrl);
 
   socket = new WebSocket(serverUrl);
 
@@ -139,6 +223,9 @@ async function connect(serverUrl) {
       payload: staticPayload
     }));
 
+    await sendStaticInfoToDB();
+    dbInterval = setInterval(sendDynamicInfoToDB, DB_INTERVAL);
+
     sendHeartbeat();
     startFastMetrics();
     heartbeatInterval = setInterval(sendHeartbeat, 5000);
@@ -147,10 +234,11 @@ async function connect(serverUrl) {
   socket.onclose = () => {
     console.log("Disconnected. Reconnecting...");
     cleanupIntervals();
+    staticSentToDB = false;
     reconnectTimeout = setTimeout(() => connect(currentServerUrl), 3000);
   };
 
-  socket.onerror = (err) => {
+  socket.onerror = err => {
     console.error("WebSocket error:", err.message);
   };
 }
@@ -163,6 +251,7 @@ async function startAgent(serverUrl) {
 function stopAgent() {
   cleanupIntervals();
   currentServerUrl = null;
+  currentDbUrl = null;
 
   if (socket) {
     try {
