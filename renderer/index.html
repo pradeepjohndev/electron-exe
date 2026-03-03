@@ -135,6 +135,13 @@
           <div class="prefix">PORT</div>
           <input id="port" placeholder="8080" />
         </div>
+        <label>DB IP Address:</label>
+        <div class="input-wrapper">
+          <div class="prefix">IP</div>
+          <input id="db-ip" placeholder="192.200.9.45" />
+          <div class="prefix">PORT</div>
+          <input id="db-port" placeholder="8080" />
+        </div>
       </div>
 
       <button class="primary-btn" onclick="save()">Save & Start</button>
@@ -149,27 +156,38 @@
         return regex.test(ip);
       }
 
+      function isValidPort(port) {
+        const num = Number(port);
+        return Number.isInteger(num) && num >= 1 && num <= 65535;
+      }
+
       function save() {
         const ip = document.getElementById("ip").value.trim();
-        const portText = document.getElementById("port").value.trim();
-        const port = Number(portText);
+        const port = document.getElementById("port").value.trim();
 
-        if (!isValidIP(ip)) {
-          alert("Enter valid IPv4 address.");
+        const dbIp = document.getElementById("db-ip").value.trim();
+        const dbPort = document.getElementById("db-port").value.trim();
+
+        if (!isValidIP(ip) || !isValidPort(port)) {
+          alert("Enter valid Server IP and Port.");
           return;
         }
 
-        if (!Number.isInteger(port) || port < 1 || port > 65535) {
-          alert("Enter valid port (1-65535).");
+        if (!isValidIP(dbIp) || !isValidPort(dbPort)) {
+          alert("Enter valid DB IP and Port.");
           return;
         }
 
-        const fullUrl = `ws://${ip}:${port}/ws`;
+        const serverUrl = `ws://${ip}:${port}/ws`;
+        const dbUrl = `http://${dbIp}:${dbPort}`;
 
-        window.api.saveServer(fullUrl);
+        window.api.saveServer({
+          serverUrl,
+          dbUrl,
+        });
 
         document.getElementById("status").innerText =
-          "Connecting to " + fullUrl;
+          "Connecting to Server: " + serverUrl + " | DB: " + dbUrl;
       }
     </script>
   </body>

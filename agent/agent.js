@@ -23,16 +23,11 @@ const percent = v => v.toFixed(1) + " %";
 
 async function resolvePcId() {
   try {
-    PC_ID = `${os.hostname()} - ${os.userInfo().username}` || `PC-${Math.floor(Math.random() * 10000)}`;
+    PC_ID =
+      `${os.hostname()} - ${os.userInfo().username}` || `PC-${Math.floor(Math.random() * 10000)}`;
   } catch {
     PC_ID = `PC-${Math.floor(Math.random() * 10000)}`;
   }
-}
-
-function convertWsToHttp(wsUrl) {
-  const url = new URL(wsUrl);
-  const protocol = url.protocol === "wss:" ? "https:" : "http:";
-  return `${protocol}//${url.host}`;
 }
 
 async function getStaticInfo() {
@@ -63,7 +58,7 @@ async function getStaticInfo() {
 }
 
 async function sendStaticInfoToDB() {
-  if (staticSentToDB || !staticPayload) return;
+  if (staticSentToDB || !staticPayload || !currentDbUrl) return;
 
   try {
     await axios.post(`${currentDbUrl}/api/agent/register`, {
@@ -80,13 +75,14 @@ async function sendStaticInfoToDB() {
 
     staticSentToDB = true;
     console.log("Static info stored in DB");
-
   } catch (err) {
     console.error("Static DB error:", err.response?.data || err.message);
   }
 }
 
 async function sendDynamicInfoToDB() {
+  if (!currentDbUrl) return;
+
   try {
     const [load, mem, time, disks] = await Promise.all([
       si.currentLoad(),
@@ -120,7 +116,6 @@ async function sendDynamicInfoToDB() {
     }
 
     await axios.post(`${currentDbUrl}/api/metrics`, payload);
-
   } catch (err) {
     console.error("Dynamic DB error:", err.response?.data || err.message);
   }
@@ -128,10 +123,12 @@ async function sendDynamicInfoToDB() {
 
 function sendHeartbeat() {
   if (socket && socket.readyState === WebSocket.OPEN) {
-    socket.send(JSON.stringify({
-      type: "HEARTBEAT",
-      pcId: PC_ID
-    }));
+    socket.send(
+      JSON.stringify({
+        type: "HEARTBEAT",
+        pcId: PC_ID
+      })
+    );
   }
 }
 
@@ -152,40 +149,40 @@ function startFastMetrics() {
       const netlog = stats[0];
       const net = nets.find(n => !n.internal && n.ip4);
 
-      socket.send(JSON.stringify({
-        type: "SYSTEM_STATS",
-        pcId: PC_ID,
-        payload: {
-          timestamp: Date.now(),
-          uptime: uptime.uptime,
-          cpu: { load: Number(load.currentLoad.toFixed(2)) },
-          memory: {
-            used: memory.used,
-            free: memory.free,
-            total: memory.total
-          },
-          network: {
-            ip: net?.ip4 || "N/A",
-            mac: net?.mac || "N/A",
-            iface: net?.iface || "N/A",
-            upload: netlog ? (netlog.tx_sec / 1024).toFixed(2) : "0",
-            download: netlog ? (netlog.rx_sec / 1024).toFixed(2) : "0"
-          },
-          disks: disks.map(d => ({
-            mount: d.mount,
-            type: d.type || "Unknown",
-            size: gb(d.size),
-            used: gb(d.used),
-            available: gb(d.available),
-            usage: percent(d.use)
-          }))
-        }
-      }));
-
+      socket.send(
+        JSON.stringify({
+          type: "SYSTEM_STATS",
+          pcId: PC_ID,
+          payload: {
+            timestamp: Date.now(),
+            uptime: uptime.uptime,
+            cpu: { load: Number(load.currentLoad.toFixed(2)) },
+            memory: {
+              used: memory.used,
+              free: memory.free,
+              total: memory.total
+            },
+            network: {
+              ip: net?.ip4 || "N/A",
+              mac: net?.mac || "N/A",
+              iface: net?.iface || "N/A",
+              upload: netlog ? (netlog.tx_sec / 1024).toFixed(2) : "0",
+              download: netlog ? (netlog.rx_sec / 1024).toFixed(2) : "0"
+            },
+            disks: disks.map(d => ({
+              mount: d.mount,
+              type: d.type || "Unknown",
+              size: gb(d.size),
+              used: gb(d.used),
+              available: gb(d.available),
+              usage: percent(d.use)
+            }))
+          }
+        })
+      );
     } catch (err) {
       console.error("Metric error:", err.message);
     }
-
   }, 1000);
 }
 
@@ -201,12 +198,12 @@ function cleanupIntervals() {
   reconnectTimeout = null;
 }
 
-function connect(serverUrl) {
+function connect(serverUrl, dbUrl) {
   currentServerUrl = serverUrl;
-  currentDbUrl = convertWsToHttp(serverUrl);
+  currentDbUrl = dbUrl;
 
   console.log("Agent connecting to:", serverUrl);
-  console.log("DB URL:", currentDbUrl);
+  console.log("DB URL:", dbUrl);
 
   socket = new WebSocket(serverUrl);
 
@@ -217,11 +214,13 @@ function connect(serverUrl) {
       staticPayload = await getStaticInfo();
     }
 
-    socket.send(JSON.stringify({
-      type: "REGISTER",
-      pcId: PC_ID,
-      payload: staticPayload
-    }));
+    socket.send(
+      JSON.stringify({
+        type: "REGISTER",
+        pcId: PC_ID,
+        payload: staticPayload
+      })
+    );
 
     await sendStaticInfoToDB();
     dbInterval = setInterval(sendDynamicInfoToDB, DB_INTERVAL);
@@ -235,7 +234,10 @@ function connect(serverUrl) {
     console.log("Disconnected. Reconnecting...");
     cleanupIntervals();
     staticSentToDB = false;
-    reconnectTimeout = setTimeout(() => connect(currentServerUrl), 3000);
+    reconnectTimeout = setTimeout(
+      () => connect(currentServerUrl, currentDbUrl),
+      3000
+    );
   };
 
   socket.onerror = err => {
@@ -243,9 +245,9 @@ function connect(serverUrl) {
   };
 }
 
-async function startAgent(serverUrl) {
+async function startAgent(serverUrl, dbUrl) {
   await resolvePcId();
-  connect(serverUrl);
+  connect(serverUrl, dbUrl);
 }
 
 function stopAgent() {
