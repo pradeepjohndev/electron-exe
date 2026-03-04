@@ -18,7 +18,9 @@ function createWindow(showOnLaunch) {
         }
     });
 
-    mainWindow.loadFile(path.join(__dirname, "renderer", "index.html"));
+    mainWindow.loadFile(
+        path.join(__dirname, "renderer", "index.html")
+    );
 
     mainWindow.on("close", (event) => {
         event.preventDefault();
@@ -28,25 +30,22 @@ function createWindow(showOnLaunch) {
 
 function createTray() {
     tray = new Tray(path.join(__dirname, "icon.png"));
-
     const contextMenu = Menu.buildFromTemplate([
         { label: "Open", click: () => mainWindow.show() },
         { label: "Exit", click: () => app.quit() }
-    ]);
 
+    ]);
     tray.setToolTip("System Monitoring Agent");
     tray.setContextMenu(contextMenu);
     tray.on("click", () => mainWindow.show());
 }
 
-async function startAgent(serverUrl) {
+async function startAgent(serverUrl, apiUrl) {
     if (!agentModule) {
         const agentPath = path.join(__dirname, "agent", "agent.js");
         agentModule = require(agentPath);
     }
-
-    agentModule.stopAgent();
-    agentModule.startAgent(serverUrl);
+    agentModule.startAgent(serverUrl, apiUrl);
 }
 
 app.whenReady().then(() => {
@@ -55,7 +54,8 @@ app.whenReady().then(() => {
         args: ["--autostart"]
     });
 
-    const isAutoStartLaunch = process.argv.includes("--autostart");
+    const isAutoStartLaunch =
+        process.argv.includes("--autostart");
 
     createWindow(!isAutoStartLaunch);
     createTray();
@@ -66,8 +66,13 @@ app.whenReady().then(() => {
     }
 });
 
-ipcMain.handle("save-server", async (event, serverUrl) => {
-    startAgent(serverUrl);
+ipcMain.handle("save-server", async (event, config) => {
+    const { serverUrl, apiUrl } = config;
+    console.log("Starting agent");
+    console.log("WebSocket:", serverUrl);
+    console.log("API:", apiUrl);
+
+    startAgent(serverUrl, apiUrl);
     mainWindow.hide();
     return true;
 });

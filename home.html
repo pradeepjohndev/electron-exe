@@ -3,7 +3,6 @@
   <head>
     <meta charset="UTF-8" />
     <title>System Agent Setup</title>
-
     <style>
       body {
         margin: 0;
@@ -60,7 +59,7 @@
         border: 1px solid #dcdcdc;
         border-radius: 8px;
         overflow: hidden;
-        transition: 0.2s;
+        transition: all 0.2s ease;
       }
 
       .input-wrapper:focus-within {
@@ -85,6 +84,10 @@
         font-size: 14px;
       }
 
+      input::placeholder {
+        color: #aaa;
+      }
+
       .primary-btn {
         width: 100%;
         padding: 12px;
@@ -96,7 +99,7 @@
         cursor: pointer;
         background: linear-gradient(135deg, #1e88e5, #1565c0);
         color: white;
-        transition: 0.2s;
+        transition: all 0.2s ease;
       }
 
       .primary-btn:hover {
@@ -104,9 +107,8 @@
         box-shadow: 0 8px 20px rgba(21, 101, 192, 0.3);
       }
 
-      .primary-btn:disabled {
-        background: #ccc;
-        cursor: not-allowed;
+      .primary-btn:active {
+        transform: scale(0.98);
       }
 
       #status {
@@ -126,26 +128,23 @@
       <h3>Connection Configuration</h3>
 
       <div class="form-group">
-        <label>Server IP Address</label>
-
+        <label>Server IP Address:</label>
         <div class="input-wrapper">
           <div class="prefix">IP</div>
-          <input id="ip" placeholder="192.9.200.24" />
-
+          <input id="ip" placeholder="192.168.1.100" />
           <div class="prefix">PORT</div>
-          <input
-            id="port"
-            type="number"
-            min="1"
-            max="65535"
-            placeholder="8080"
-          />
+          <input id="port" placeholder="8080" />
+        </div>
+        <label>DB IP Address:</label>
+        <div class="input-wrapper">
+          <div class="prefix">IP</div>
+          <input id="db-ip" placeholder="192.200.9.45" />
+          <div class="prefix">PORT</div>
+          <input id="db-port" placeholder="8080" />
         </div>
       </div>
 
-      <button id="connectBtn" class="primary-btn" onclick="save()">
-        Save & Start
-      </button>
+      <button class="primary-btn" onclick="save()">Save & Start</button>
 
       <p id="status">Waiting for configuration...</p>
     </div>
@@ -154,44 +153,42 @@
       function isValidIP(ip) {
         const regex =
           /^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
-
         return regex.test(ip);
+      }
+
+      function isValidPort(port) {
+        const num = Number(port);
+        return Number.isInteger(num) && num >= 1 && num <= 65535;
       }
 
       function save() {
         const ip = document.getElementById("ip").value.trim();
-        const portText = document.getElementById("port").value.trim();
-        const port = Number(portText);
+        const port = document.getElementById("port").value.trim();
 
-        if (!ip || !portText) {
-          alert("Please enter server IP and port");
+        const dbIp = document.getElementById("db-ip").value.trim();
+        const dbPort = document.getElementById("db-port").value.trim();
+
+        if (!isValidIP(ip) || !isValidPort(port)) {
+          alert("Enter valid Server IP and Port.");
           return;
         }
 
-        if (!isValidIP(ip)) {
-          alert("Enter valid IPv4 address.");
-          return;
-        }
-
-        if (!Number.isInteger(port) || port < 1 || port > 65535) {
-          alert("Enter valid port (1-65535).");
+        if (!isValidIP(dbIp) || !isValidPort(dbPort)) {
+          alert("Enter valid DB IP and Port.");
           return;
         }
 
         const serverUrl = `ws://${ip}:${port}/ws`;
-        const apiUrl = `http://${ip}:${port}`;
-
-        document.getElementById("status").innerText =
-          "Connecting to " + serverUrl;
-
-        document.getElementById("connectBtn").disabled = true;
+        const dbUrl = `http://${dbIp}:${dbPort}`;
 
         window.api.saveServer({
           serverUrl,
-          apiUrl,
+          dbUrl,
         });
+
+        document.getElementById("status").innerText =
+          "Connecting to Server: " + serverUrl + " | DB: " + dbUrl;
       }
     </script>
-    <script src="../renderer.js"></script>
   </body>
 </html>

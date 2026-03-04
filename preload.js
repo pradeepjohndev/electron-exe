@@ -1,5 +1,7 @@
 const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("api", {
-    saveServer: (url) => ipcRenderer.invoke("save-server", url)
+    saveServer: (config) => {
+        return ipcRenderer.invoke("save-server", config);
+    }
 });
